@@ -1,0 +1,457 @@
+---
+title: "nba_finalproject"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ballr)
+library(dplyr)
+library(nbastatR)
+current<-NBAPerGameStatistics(season=2020)
+
+perAdv<-NBAPerGameAdvStatistics(season = 2020)
+
+
+
+#salary for free agents #
+plyr<-nba_insider_salaries()
+plyr<-subset(plyr,plyr$slugSeason == '2020-21')
+#current_plyr<-subset(plyr,plyr$slugSeason == '2019-20')
+fa_slry<-subset(plyr,plyr$isFinalSeason == TRUE)
+names(fa_slry)[3]<-"player"
+names(plyr)[3]<-"player"
+
+###### PLAYER WIN SCORE ######
+#### Pg 199 in Mathletics
+
+
+current$plyr_win_score<-(current$pts + current$trb + current$stl + 0.5*current$ast + 0.5*current$blk -
+                           current$fga - current$tov - 0.5*current$fta - 0.5*current$pf)
+
+current<- current %>%
+mutate(plyr_win_rank = dense_rank(desc(plyr_win_score)))
+
+current<- current %>%
+  left_join(plyr,current,by="player")
+
+lal<-subset(current,current$tm == 'LAL')
+lal_1<-subset(lal,select=c('player','pos','age','mp','plyr_win_score'))
+lal_1
+
+fa_slry<- fa_slry %>%
+  left_join(current,fa_slry,by="player")
+
+fa_slry<- fa_slry %>%
+  left_join(perAdv,fa_slry,by="player")
+
+fa<-fa_slry
+
+#fa<-subset(current,current$player %in% c('Draymond Green','DeMar DeRozan','Andre Drummond','Danilo Gallinari','Eric Gordon','Mike Conley','Fred VanVleet','Kyle Lowry','Montrezl Harrell','Gordon Hayward','Otto Porter','Evan Fournier','Joe Harris','Marc Gasol','Serge Ibaka','Rodney Hood','Bryn Forbes','Jerami Grant','Paul Millsap','JaMychal Green','Tim Hardaway Jr.','Jeff Teague','Hassan Whiteside','Jahlil Okafor','Derrick Favors','Goran Dragic','James Johnson','Evan Turner','Noah Vonleh','Kelly Olynyk','	Maurice Harkless','Jae Crowder','James Ennis','Andre Roberson','Markieff Morris','Marcus Morris','Robin Lopez','Meyers Leonard','David Bertans'))
+
+fa<-subset(fa,select=c('player','pos.x','tm.x','age.x','mp.x','plyr_win_score','plyr_win_rank','value.x'))
+fa<-subset(fa,fa$tm.x != 'TOT')
+names(fa)[8]<-"value"
+names(fa)[2]<-"pos"
+names(fa)[3]<-"tm"
+names(fa)[4]<-"age"
+names(fa)[5]<-"mp"
+fa
+
+fa<- fa %>%
+  group_by(player,pos,age,value) %>%
+  summarise(mp = mean(mp),
+            plyr_win_score = mean(plyr_win_score),
+            plyr_win_rank = mean(plyr_win_rank))
+
+fa<-fa %>% arrange(-desc(plyr_win_rank))
+
+
+formattable(fa, align = c("l", "c", "c", "c", "c", "r"),
+            list(`Indicator Name` = formatter("span", style = ~style(color = "grey", font.weight = "bold"))
+            ))
+
+
+####Efficiency Per Game #####
+current$missed_fg<- (1-current$fgpercent)*current$fga
+current$missed_ft<- (1-current$ftpercent)*current$fta
+
+current$efficiency<-(current$pts + current$trb + current$ast + current$stl + current$blk - current$tov - current$missed_fg - current$missed_ft)
+
+
+current<- current %>%
+mutate(efficiency_rank = dense_rank(desc(efficiency)))
+
+#current free agents #
+
+fa_slry$missed_fg<- (1-fa_slry$fgpercent)*fa_slry$fga
+fa_slry$missed_ft<- (1-fa_slry$ftpercent)*fa_slry$fta
+
+fa_slry$efficiency<-(fa_slry$pts + fa_slry$trb + fa_slry$ast + fa_slry$stl + fa_slry$blk - fa_slry$tov - fa_slry$missed_fg - fa_slry$missed_ft)
+
+
+fa_slry<- fa_slry %>%
+mutate(efficiency_rank = dense_rank(desc(efficiency)))
+
+eff<-subset(fa_slry,select=c('player','pos.x','tm.x','age.x','mp.x','efficiency','efficiency_rank','value.x'))
+eff<-subset(eff,complete.cases(eff))
+eff<-subset(eff,tm.x != 'TOT')
+eff<-eff %>% arrange(-desc(efficiency_rank))
+
+eff<- eff %>%
+  group_by(player,pos.x,age.x,value.x) %>%
+  summarise(mp = mean(mp.x),
+            efficiency = mean(efficiency),
+            efficiency_rank = mean(efficiency_rank))
+
+names(eff)[2]<-"pos"
+names(eff)[3]<-"age"
+names(eff)[4]<-"value"
+  
+
+
+
+#Malik Beasley, Justice Winslow, Otto Porter, Rishaun Holmes, Miles Bridges
+
+formattable(eff, align = c("l", "c", "c", "c", "c", "r"),
+            list(`Indicator Name` = formatter("span", style = ~style(color = "grey", font.weight = "bold"))
+            ))
+
+
+#### BPM ####
+
+
+bpm<- fa_slry %>%
+mutate(BPM_rank = dense_rank(desc(bpm)))
+
+bpm<-subset(bpm,select=c('player','pos.x','tm.x','age.x','mp.x','bpm','BPM_rank','value.x'))
+bpm<-subset(bpm,complete.cases(bpm))
+bpm<-subset(bpm,tm.x != 'TOT')
+bpm<-bpm %>% arrange(-desc(BPM_rank))
+bpm
+
+bpm<- bpm %>%
+  group_by(player,pos.x,age.x,value.x) %>%
+  summarise(mp = mean(mp.x),
+            bpm = mean(bpm),
+            BPM_rank = mean(BPM_rank))
+
+bpm<-bpm %>% arrange(-desc(BPM_rank))
+bpm$BPM_rank<-round(bpm$BPM_rank,0)
+bpm$bpm<-round(bpm$bpm,2)
+
+formattable(bpm, align = c("l", "c", "c", "c", "c", "r"),
+            list(`Indicator Name` = formatter("span", style = ~style(color = "grey", font.weight = "bold"))
+            ))
+
+
+### VORP ####
+VORP<- fa_slry %>%
+mutate(VORP_rank = dense_rank(desc(vorp)))
+
+VORP<-subset(VORP,select=c('player','pos.x','tm.x','age.x','mp.x','vorp','VORP_rank','value.x'))
+VORP<-subset(VORP,complete.cases(VORP))
+VORP<-subset(VORP,tm.x != 'TOT')
+VORP %>% arrange(-desc(VORP_rank))
+
+#Let's select Richaun Holmes, DeMar DeRozan, Miles Bridges
+
+VORP<- VORP %>%
+  group_by(player,pos.x,age.x,value.x) %>%
+  summarise(mp = mean(mp.x),
+            vorp = mean(vorp),
+            VORP_rank = mean(VORP_rank))
+
+VORP<-VORP %>% arrange(-desc(VORP_rank))
+VORP$VORP_rank<-round(VORP$VORP_rank,0)
+VORP$vorp<-round(VORP$vorp,2)
+
+formattable(VORP, align = c("l", "c", "c", "c", "c", "r"),
+            list(`Indicator Name` = formatter("span", style = ~style(color = "grey", font.weight = "bold"))
+            ))
+
+
+
+```
+
+
+
+```{r clp}
+
+#no more than 75% in starting line
+a<-0.75
+a<-(1/a)
+
+#NBA salary cap
+total_salary<-115000000 / a
+
+#roster size of 17
+#no more than 75% of salary to starting lineup
+
+rst_size<-5
+max_size<-5
+
+lal_lp<-subset(lal,select=c("player","pos","age","mp","plyr_win_score","value","plyr_win_rank"))
+
+#if null remove from lineup
+lal_lp<-subset(lal_lp,complete.cases(lal_lp))
+lal_lp
+
+#set position parameters
+
+library(lpSolve)
+
+lal_lp$pos<-as.factor(lal_lp$pos)
+lal_lp$value<-as.numeric(lal_lp$value)
+
+A<-matrix(0,nrow=6,ncol=nrow(lal_lp))
+
+#change variables as deemed appropriate
+
+#Set PG parameters
+j<-1
+i<-1
+for (i in 1:nrow(lal_lp)){
+  if(lal_lp$pos[i]=="PG")
+    A[j,i]<-1
+}
+#Set SG parameters
+j<-2
+i<-1
+for(i in 1:nrow(lal_lp)){
+  if(lal_lp$pos[i]=="SG")
+    A[j,i]<-1
+}
+#Set SF/SG/PF parameters (flex position)
+j<-3
+i<-1
+for(i in 1:nrow(lal_lp)){
+  if(lal_lp$pos[i]=="SG" ||
+     lal_lp$pos[i]=="SF" ||
+     lal_lp$pos[i]=="PF")
+    A[j,i]<-1
+}
+#Set PF parameters
+j<-4
+i<-1
+for(i in 1:nrow(lal_lp)){
+  if(lal_lp$pos[i]=="PF")
+    A[j,i]<-1
+}
+#Set PF/C parameters
+j<-5
+i<-1
+for(i in 1:nrow(lal_lp)){
+  if(lal_lp$pos[i]=="PF" ||
+     lal_lp$pos[i]=="C")
+    A[j,i]<-1
+}
+
+A[6,]<-lal_lp$value
+
+#input to LP
+objective.in<-lal_lp$plyr_win_score
+const.mat<-A
+const.dir<-c("==","==",">=",">=",">=","<=")
+const.rhs<-c(1,1,1,1,1,total_salary)
+
+require(lpSolve)
+
+solve<- lp(direction = "max", objective.in=objective.in, # maximize objective function
+          const.mat=const.mat, const.dir=const.dir, const.rhs=const.rhs,   # constraints
+          all.bin = TRUE)   
+solve
+
+inds<-which(solve$solution == 1)
+sum(lal_lp$value[inds])
+
+solution<-lal_lp[inds,]
+solution
+
+
+
+######optimize for NBA free agency ####
+
+lal_1<-subset(lal,select=c('player','pos','age','mp','plyr_win_score','plyr_win_rank','value'))
+lal_1<-subset(lal_1,complete.cases(lal_1))
+lal_1$plyr_win_rank<-as.numeric(lal_1$plyr_win_rank)
+fa1<-subset(fa,select=c('player','pos','age','mp','plyr_win_score','plyr_win_rank','value'))
+fa1<-subset(fa1,complete.cases(fa1))
+#fa1<-subset(fa1,fa1$player %in% c('Richaun Holmes', 'DeMar DeRozan', 'Malik Beasley'))
+opt<-dplyr::bind_rows(lal_1,fa1)
+
+
+opt$pos<-as.factor(opt$pos)
+opt$value<-as.numeric(opt$value)
+
+
+A<-""
+A<-matrix(0,nrow=6,ncol=nrow(opt))
+
+
+#change variables as deemed appropriate
+
+#Set PG parameters
+j<-1
+i<-1
+for (i in 1:nrow(opt)){
+  if(opt$pos[i]=="PG")
+    A[j,i]<-1
+}
+#Set SG parameters
+j<-2
+i<-1
+for(i in 1:nrow(opt)){
+  if(opt$pos[i]=="SG")
+    A[j,i]<-1
+}
+#Set SF/SG/PF parameters (flex position)
+j<-3
+i<-1
+for(i in 1:nrow(opt)){
+  if(
+     opt$pos[i]=="SF")
+    A[j,i]<-1
+}
+#Set PF parameters
+j<-4
+i<-1
+for(i in 1:nrow(opt)){
+  if(opt$pos[i]=="PF")
+    A[j,i]<-1
+}
+#Set PF/C parameters
+j<-5
+i<-1
+for(i in 1:nrow(opt)){
+  if(
+     opt$pos[i]=="C")
+    A[j,i]<-1
+}
+
+A[6,]<-opt$value
+
+#input to LP
+objective.in<-opt$plyr_win_score
+const.mat<-A
+const.dir<-c("==","==","==","==","==","<=")
+const.rhs<-c(1,1,1,1,1,total_salary)
+
+require(lpSolve)
+
+solve<- lp(direction = "max", objective.in=objective.in, # maximize objective function
+          const.mat=const.mat, const.dir=const.dir, const.rhs=const.rhs,   # constraints
+          all.bin = FALSE)   
+solve
+
+
+
+
+inds<-which(solve$solution == 1)
+inds
+sum(opt$value[inds])
+
+solution<-opt[inds,]
+solution
+
+
+##customize to keep Lebron & AD
+fa1<-subset(fa1,fa1$player %in% c('Richaun Holmes', 'DeMar DeRozan', 'Malik Beasley','Chris Boucher'))
+opt<-dplyr::bind_rows(lal_1,fa1)
+
+opt$pos<-as.factor(opt$pos)
+opt$value<-as.numeric(opt$value)
+
+#opt
+
+
+A<-""
+A<-matrix(0,nrow=5,ncol=nrow(opt))
+
+#opt
+# row 4 is AD - PF
+# row 6 is Lebron - PG
+
+#Set PG parameters
+j<-1
+i<-6
+A[j,i]<-1
+
+#Set SG parameters
+j<-2
+i<-1
+for(i in 1:nrow(opt)){
+  if(opt$pos[i]=="SG")
+    A[j,i]<-1
+}
+#Set SF/SG/PF parameters (flex position)
+j<-3
+i<-1
+for(i in 1:nrow(opt)){
+  if(
+     opt$pos[i]=="SF")
+    A[j,i]<-1
+}
+#Set PF parameters
+j<-4
+i<-4
+A[j,i]<-1
+
+#Set PF/C parameters
+j<-5
+i<-1
+for(i in 1:nrow(opt)){
+  if(
+     opt$pos[i]=="C")
+    A[j,i]<-1
+}
+
+#A[6,]<-opt$value
+
+#input to LP
+objective.in<-opt$plyr_win_score
+const.mat<-A
+const.dir<-c("==","==","==","==","==","<=")
+const.rhs<-c(1,1,1,1,1,total_salary)
+
+require(lpSolve)
+
+solve<- lp(direction = "max", objective.in=objective.in, # maximize objective function
+          const.mat=const.mat, const.dir=const.dir, const.rhs=const.rhs,   # constraints
+          all.bin = FALSE)   
+solve
+
+inds<-which(solve$solution == 1)
+inds
+sum(opt$value[inds])
+
+solution<-opt[inds,]
+solution
+
+
+#no feasible solution ###
+
+#DeMar Derozen would be too expensive 
+
+
+###### may not be best to improve player win score through acquisition #####
+
+####could target role players to improve lineup. 
+
+
+
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
